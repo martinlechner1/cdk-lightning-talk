@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+
+    <title>Deploying serverless apps with CDK</title>
+
+    <link rel="stylesheet" href="css/reset.css" />
+    <link rel="stylesheet" href="css/reveal.css" />
+    <link rel="stylesheet" href="css/theme/solarized.css" />
+
+    <!-- Theme used for syntax highlighting of code -->
+    <!-- <link rel="stylesheet" href="lib/css/monokai.css" /> -->
+    <link rel="stylesheet" href="plugin/prism/prism.css" />
+    <script src="plugin/prism/prism.js"></script>
+
+    <!-- Printing and PDF exports -->
+    <script>
+      var link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.type = 'text/css';
+      link.href = window.location.search.match(/print-pdf/gi)
+        ? 'css/print/pdf.css'
+        : 'css/print/paper.css';
+      document.getElementsByTagName('head')[0].appendChild(link);
+    </script>
+  </head>
+  <body>
+    <div class="reveal">
+      <div class="slides">
+        <section>
+          <h2>Deploying serverless apps with CDK</h2>
+          <p>Martin Lechner</p>
+          <small>Lead Software Engineer @ Autoscou24</small>
+          <br />
+          <small>12.12.2019</small>
+        </section>
+        <section>
+          <section><h2>Who is using infrastructure as code?</h2></section>
+          <section>
+            <h2>Who is using cloudformation yaml?</h2>
+          </section>
+          <section>
+            <h2>Who likes using cloudformation yaml?</h2>
+          </section>
+        </section>
+        <section>
+          <h2>Pain points of cloudformation yaml</h2>
+          <ul>
+            <li>lots of boilerplate</li>
+            <li>exact knowledge needed (e.g. permissions)</li>
+            <li>unintuitive api</li>
+            <li>no autocomplete</li>
+            <li>hard to test without deploying</li>
+          </ul>
+        </section>
+        <section>
+          <h2>CDK</h2>
+          <img src="AppStacks.png" />
+        </section>
+        <section>
+          <h2>Comparison of Lines of Code</h2>
+          <table>
+            <tr>
+              <th>
+                Name
+              </th>
+              <th>
+                Cloudformation
+              </th>
+              <th>
+                CDK
+              </th>
+            </tr>
+            <tr>
+              <td>Serverless API</td>
+              <td>403</td>
+              <td>45</td>
+            </tr>
+            <tr>
+              <td>S3 Static Website</td>
+              <td>187</td>
+              <td>21</td>
+            </tr>
+          </table>
+        </section>
+        <section>
+          <h2>Constructs</h2>
+          <ul>
+            <li>Level 1: One to One mappings of Cloudformation</li>
+            <li>Level 2: A better api for certain things, e.g. S3 Bucket</li>
+            <li>Level 3: Collection of multiple resources</li>
+          </ul>
+        </section>
+        <section>
+          <section>
+            <h2>Enough talk - code time</h2>
+          </section>
+          <section>
+            <h2>Not yet...</h2>
+            <img src="FeedbackApi.png" />
+          </section>
+          <section>
+            <h2>Empty Stack</h2>
+            <pre
+              class="language-ts"
+            ><code class="language-ts" data-trim>              
+                        import cdk = require('@aws-cdk/core')
+                        
+                        export class MySampleStack extends cdk.Stack {
+                          constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
+                            super(scope, id, props)
+                          
+                            // Your resources here
+
+                          }
+                        }
+
+          </code></pre>
+          </section>
+          <section>
+            <h2>Product folks like email notifications</h2>
+            <pre class="language-ts"><code class="language-ts" data-trim>
+                                import { Topic } from '@aws-cdk/aws-sns'
+                               
+                                // ... constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
+                                const topic = new Topic(this, 'FeedbackEmailTopic', {
+                                  displayName: 'as24-customer-feedback-email-delivery'
+                                })
+                                
+                                topic.addSubscription(
+                                  new EmailSubscription('letsgetfeedback@scout24.com')
+                                )
+                  </code></pre>
+          </section>
+          <section>
+            <h2>Lambda Function</h2>
+            <pre class="language-ts"><code class="language-ts" data-trim>
+                      import { Function, Code, Runtime, Tracing } from '@aws-cdk/aws-lambda'
+
+                      const feedbackHandlerFunction = new Function(this, 'FeedbackHandler', {
+                        code: Code.fromAsset(__dirname + '/../../dist/src'),
+                        runtime: Runtime.NODEJS_12_X,
+                        handler: 'index.handleEvent',
+                        tracing: Tracing.ACTIVE,
+                        logRetention: RetentionDays.ONE_WEEK
+                      })
+                      
+            </code></pre>
+          </section>
+          <section>
+            <h2>Environment & Permissions</h2>
+            <pre class="language-ts"><code class="language-ts" data-trim>
+              feedbackHandlerFunction.addEnvironment('snsTopic', topic.topicArn)
+
+              topic.grantPublish(feedbackHandlerFunction)
+                      </code></pre>
+          </section>
+          <section>
+            <h2>API Gateway</h2>
+            <pre class="language-ts"><code class="language-ts" data-trim>
+            const feedbackIntegration = new LambdaIntegration(feedbackHandlerFunction)
+            
+            const api = new RestApi(this, 'API', {
+              defaultCorsPreflightOptions: {
+                allowOrigins: Cors.ALL_ORIGINS,
+                allowMethods: Cors.ALL_METHODS
+              }
+            })
+            
+            api.root
+            .resourceForPath('/customer-feedback')
+            .addMethod('POST', feedbackIntegration)
+                              </code></pre>
+          </section>
+        </section>
+        <section>
+          <h2>Acknoledgements</h2>
+          <ul>
+            <li>AWSLoft Workshops</li>
+            <li>Scout24 colleagues for discussion</li>
+          </ul>
+        </section>
+        <section>
+          <h2>References</h2>
+          <ul>
+            <li>https://docs.aws.amazon.com/cdk/api/latest/</li>
+          </ul>
+        </section>
+        <section>
+          <h2>Bonus</h2>
+          <pre class="language-ts"><code class="language-ts" data-trim>
+                        const websiteBucket = new Bucket(this, 'CustomerFeedbackWebsiteBucket', {
+                          websiteIndexDocument: 'index.html',
+                          publicReadAccess: true,
+                          bucketName: 'as24-customer-feedback-website'
+                        })
+                        
+                        new BucketDeployment(this, 'DeployWebsite', {
+                          sources: [Source.asset(__dirname + '/../../fragment/target')],
+                          destinationBucket: websiteBucket,
+                          destinationKeyPrefix: 'assets/as24-customer-feedback/'
+                        })
+                                      </code></pre>
+        </section>
+      </div>
+    </div>
+
+    <script src="js/reveal.js"></script>
+
+    <script>
+      // More info about config & dependencies:
+      // - https://github.com/hakimel/reveal.js#configuration
+      // - https://github.com/hakimel/reveal.js#dependencies
+      Reveal.initialize({
+        dependencies: [
+          { src: 'plugin/markdown/marked.js' },
+          { src: 'plugin/markdown/markdown.js' },
+          { src: 'plugin/notes/notes.js', async: true },
+          /*{ src: 'plugin/highlight/highlight.js', async: true }, */
+        ],
+      });
+    </script>
+  </body>
+</html>
